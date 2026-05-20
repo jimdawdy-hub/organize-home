@@ -5,5 +5,4 @@ __pycache__/
 venv/
 *.egg-info/
 .pytest_cache/
-~/.organize-home-state.json
-~/.organize-home-index.json
+# Runtime state files live at ~/.organize-home-*.json (outside repo, never tracked)
