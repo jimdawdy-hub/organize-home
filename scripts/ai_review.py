@@ -96,7 +96,11 @@ if __name__ == "__main__":
         else:
             print(json.dumps({"text": text}))
     elif mode == "--record":
-        from scripts.state import StateManager
+        try:
+            from scripts.state import StateManager
+        except ImportError:
+            # When run as a script, need relative import
+            from state import StateManager
         result = json.loads(sys.argv[3])
         sm = StateManager()
         record_result(sys.argv[2], result, sm)
