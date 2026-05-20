@@ -3,16 +3,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-DEFAULT_STATE = {
-    "version": 1,
-    "started_at": None,
-    "backup_path": None,
-    "vision": None,
-    "completed_phases": [],
-    "moves": [],
-    "low_confidence": [],
-    "errors": [],
-}
+def _default_state() -> dict:
+    """Return a fresh default state dict. Must be a function to avoid sharing mutable defaults."""
+    return {
+        "version": 1,
+        "started_at": None,
+        "backup_path": None,
+        "vision": None,
+        "completed_phases": [],
+        "moves": [],
+        "low_confidence": [],
+        "errors": [],
+    }
+
+
+DEFAULT_STATE = _default_state()  # For backward compatibility
 
 
 class StateManager:
@@ -23,10 +28,11 @@ class StateManager:
 
     def load(self) -> dict:
         if not self.path.exists():
-            return dict(DEFAULT_STATE)
+            return _default_state()
         with self.path.open() as f:
             data = json.load(f)
-        for k, v in DEFAULT_STATE.items():
+        defaults = _default_state()
+        for k, v in defaults.items():
             data.setdefault(k, v)
         return data
 
