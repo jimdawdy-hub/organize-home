@@ -8,20 +8,28 @@ from pathlib import Path
 def build_index(home_dir: str) -> list[dict]:
     """Walk home_dir and first-level subdirectories only. Returns list of file entry dicts.
 
-    Does NOT recurse into second-level directories.
+    Skips hidden files and hidden directories at both levels. Does NOT recurse into
+    second-level directories. Does NOT follow symlinks (a symlinked directory at
+    depth 1 is treated as a file and skipped).
     """
     home = Path(home_dir)
     entries = []
 
-    # Depth 0: files directly in home
+    # Depth 0: visible files directly in home (skip dotfiles, skip symlinks-to-files)
     for item in home.iterdir():
+        if item.name.startswith("."):
+            continue
         if item.is_file(follow_symlinks=False):
             entries.append(_make_entry(item))
 
-    # Depth 1: files in immediate subdirectories
+    # Depth 1: visible files in visible immediate subdirectories
     for subdir in home.iterdir():
+        if subdir.name.startswith("."):
+            continue
         if subdir.is_dir(follow_symlinks=False):
             for item in subdir.iterdir():
+                if item.name.startswith("."):
+                    continue
                 if item.is_file(follow_symlinks=False):
                     entries.append(_make_entry(item))
 

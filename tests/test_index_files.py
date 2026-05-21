@@ -68,3 +68,30 @@ def test_save_and_load_index(fake_home, tmp_path):
     loaded = load_index(str(index_path))
     assert len(loaded) == len(entries)
     assert loaded[0]["path"] == entries[0]["path"]
+
+
+def test_build_index_skips_dotfiles_at_root(fake_home):
+    (fake_home / ".bashrc").write_text("export PATH=...")
+    (fake_home / ".profile").write_text("# profile")
+    entries = build_index(str(fake_home))
+    paths = [e["path"] for e in entries]
+    assert not any(".bashrc" in p for p in paths)
+    assert not any(".profile" in p for p in paths)
+
+
+def test_build_index_skips_dotdirs(fake_home):
+    ssh = fake_home / ".ssh"
+    ssh.mkdir()
+    (ssh / "id_rsa").write_text("PRIVATE KEY")
+    (ssh / "config").write_text("Host *")
+    entries = build_index(str(fake_home))
+    paths = [e["path"] for e in entries]
+    assert not any(".ssh" in p for p in paths)
+    assert not any("id_rsa" in p for p in paths)
+
+
+def test_build_index_skips_dotfiles_in_subdirs(fake_home):
+    (fake_home / "Downloads" / ".hidden_in_downloads").write_text("x")
+    entries = build_index(str(fake_home))
+    paths = [e["path"] for e in entries]
+    assert not any(".hidden_in_downloads" in p for p in paths)
