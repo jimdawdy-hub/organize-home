@@ -1,10 +1,17 @@
 """HTML report generator.
 
 CLI: html_report.py --state <state_json_path> --home <home_dir> --output <html_path>
+
+Security: all interpolated user/AI-controlled values are HTML-escaped. Shell commands
+shown to the user for copy/paste are quoted with shlex.quote(). data-* attributes
+embedding strings for JavaScript use json.dumps() (which produces valid HTML-attribute-
+escaped JSON).
 """
 import json
+import shlex
 import sys
 from datetime import datetime
+from html import escape as h
 from pathlib import Path
 
 CSS = """
@@ -28,23 +35,32 @@ a { color: #0f3460; } a:hover { color: #e94560; }
 """
 
 
+def _is_human_review(to_path: str) -> bool:
+    """Return True if to_path is the dedicated Human Review folder.
+
+    Uses exact parent-directory name match — not substring — so user folders
+    named 'Human Review Notes' or 'Documents/Human Review' don't false-match.
+    """
+    if not to_path:
+        return False
+    p = Path(to_path)
+    return p.parent.name == "Human Review" or p.name == "Human Review"
+
+
 def generate_report(state: dict, home_dir: str, output_path: str) -> None:
-    moves = state.get("moves", [])
-    low_conf = state.get("low_confidence", [])
-    errors = state.get("errors", [])
-    backup_path = state.get("backup_path", "unknown")
-    started_at = state.get("started_at", "")
+    moves = state.get("moves", []) or []
+    low_conf = state.get("low_confidence", []) or []
+    errors = state.get("errors", []) or []
+    backup_path = state.get("backup_path") or "unknown"
+    started_at = state.get("started_at") or ""
     date_str = started_at[:10] if started_at else datetime.now().strftime("%Y-%m-%d")
 
-    human_review_entries = [
-        m for m in moves
-        if "Human Review" in m.get("to", "")
-    ]
+    human_review_entries = [m for m in moves if _is_human_review(m.get("to", ""))]
     auto_moved = [m for m in moves if m not in human_review_entries]
 
     sections = []
 
-    # Stats bar
+    # Stats bar — counts are integers, no escaping needed; backup_path IS escaped
     sections.append(f"""
 <div class="stats">
   <div class="stat"><div class="num">{len(moves)}</div><div class="label">files moved</div></div>
@@ -52,24 +68,31 @@ def generate_report(state: dict, home_dir: str, output_path: str) -> None:
   <div class="stat"><div class="num">{len(human_review_entries)}</div><div class="label">human review</div></div>
   <div class="stat"><div class="num">{len(errors)}</div><div class="label">errors</div></div>
 </div>
-<p><strong>Backup:</strong> <code>{backup_path}</code><br>
-<strong>Run date:</strong> {date_str}</p>
+<p><strong>Backup:</strong> <code>{h(backup_path)}</code><br>
+<strong>Run date:</strong> {h(date_str)}</p>
 """)
 
     # Amber section — low confidence
     if low_conf:
         rows = ""
         for lc in low_conf:
-            conf_pct = f"{lc['confidence']*100:.0f}%"
-            mv_cmd = f"mv '{lc['path']}' '{lc['proposed']}'"
+            lc_path = str(lc.get("path", ""))
+            lc_proposed = str(lc.get("proposed", ""))
+            lc_reason = str(lc.get("reason", ""))
+            lc_conf = float(lc.get("confidence", 0))
+            conf_pct = f"{lc_conf*100:.0f}%"
+            # shlex.quote handles single quotes safely (turns ' into '"'"')
+            mv_cmd = f"mv {shlex.quote(lc_path)} {shlex.quote(lc_proposed)}"
+            # json.dumps gives a valid JS string literal; h() then escapes for HTML attribute
+            mv_cmd_attr = h(json.dumps(mv_cmd), quote=True)
             rows += f"""
 <tr>
-  <td><a href="file://{lc['path']}">{Path(lc['path']).name}</a></td>
-  <td><code>{lc['path']}</code></td>
-  <td><code>{lc['proposed']}</code></td>
-  <td class="confidence">{conf_pct}</td>
-  <td>{lc['reason']}</td>
-  <td><span class="cmd" onclick="navigator.clipboard.writeText(this.dataset.cmd)" data-cmd="{mv_cmd}">📋 copy</span></td>
+  <td><a href="file://{h(lc_path, quote=True)}">{h(Path(lc_path).name)}</a></td>
+  <td><code>{h(lc_path)}</code></td>
+  <td><code>{h(lc_proposed)}</code></td>
+  <td class="confidence">{h(conf_pct)}</td>
+  <td>{h(lc_reason)}</td>
+  <td><span class="cmd" onclick="navigator.clipboard.writeText({mv_cmd_attr})">📋 copy</span></td>
 </tr>"""
         sections.append(f"""
 <div class="amber">
@@ -86,8 +109,8 @@ correct any proposals, or say <strong>"move all proposed"</strong> to accept the
     # Human Review section
     if human_review_entries:
         rows = "".join(
-            f'<tr><td><a href="file://{m["from"]}">{Path(m["from"]).name}</a></td>'
-            f'<td><code>{m["from"]}</code></td></tr>'
+            f'<tr><td><a href="file://{h(m["from"], quote=True)}">{h(Path(m["from"]).name)}</a></td>'
+            f'<td><code>{h(m["from"])}</code></td></tr>'
             for m in human_review_entries
         )
         sections.append(f"""
@@ -100,10 +123,10 @@ correct any proposals, or say <strong>"move all proposed"</strong> to accept the
     # Move log
     if auto_moved:
         rows = "".join(
-            f'<tr><td><a href="file://{m["to"]}">{Path(m["from"]).name}</a></td>'
-            f'<td><code>{m["from"]}</code></td>'
-            f'<td><code>{m["to"]}</code></td>'
-            f'<td>{m.get("rule","")}</td></tr>'
+            f'<tr><td><a href="file://{h(m["to"], quote=True)}">{h(Path(m["from"]).name)}</a></td>'
+            f'<td><code>{h(m["from"])}</code></td>'
+            f'<td><code>{h(m["to"])}</code></td>'
+            f'<td>{h(m.get("rule", ""))}</td></tr>'
             for m in auto_moved
         )
         sections.append(f"""
@@ -122,7 +145,7 @@ correct any proposals, or say <strong>"move all proposed"</strong> to accept the
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Home Directory Index — {date_str}</title>
+<title>Home Directory Index — {h(date_str)}</title>
 <style>{CSS}</style>
 </head>
 <body>
@@ -140,19 +163,22 @@ def _build_dir_tree(home_dir: str) -> str:
     items = ["<h2>Directory Tree</h2><ul>"]
     try:
         for item in sorted(home.iterdir()):
+            # Skip hidden files/folders — they aren't part of the organized layout
+            if item.name.startswith("."):
+                continue
             if item.is_dir():
-                items.append(f'<li>📁 <strong>{item.name}/</strong><ul>')
+                items.append(f'<li>📁 <strong>{h(item.name)}/</strong><ul>')
                 try:
                     for child in sorted(item.iterdir()):
-                        if child.is_file():
+                        if child.is_file() and not child.name.startswith("."):
                             items.append(
-                                f'<li><a href="file://{child}">📄 {child.name}</a></li>'
+                                f'<li><a href="file://{h(str(child), quote=True)}">📄 {h(child.name)}</a></li>'
                             )
                 except PermissionError:
                     pass
                 items.append("</ul></li>")
             elif item.is_file():
-                items.append(f'<li><a href="file://{item}">📄 {item.name}</a></li>')
+                items.append(f'<li><a href="file://{h(str(item), quote=True)}">📄 {h(item.name)}</a></li>')
     except PermissionError:
         pass
     items.append("</ul>")
