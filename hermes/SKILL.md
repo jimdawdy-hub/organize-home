@@ -40,7 +40,7 @@ At the start of every run, check `~/.organize-home-state.json`. If it exists, re
 
 ## Phase 0: Preflight
 
-1. Verify: `tar`, `file`, `exiftool` are on PATH. Verify Python packages: `python3 -c "import pypdf, docx, PIL"`
+1. Verify: `tar`, `file`, `exiftool` are on PATH. Verify Python packages: `python3 -c "import pypdf, docx, PIL"`. Optionally check for `pigz` (parallel gzip — used automatically if installed; backup falls back to single-threaded gzip otherwise).
 2. Detect drives:
 ```bash
 python3 -c "

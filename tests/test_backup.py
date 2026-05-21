@@ -55,18 +55,22 @@ def test_create_backup_calls_tar(tmp_path):
     backup_dir = tmp_path / "backup"
     backup_dir.mkdir()
 
-    with patch("scripts.backup.subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0)
-        with patch("scripts.backup.Path.stat") as mock_stat:
-            mock_stat.return_value = MagicMock(st_size=5 * 1024**3)
-            result = create_backup(str(home_dir), str(backup_dir), date_str="2026-05-20")
+    # Force the single-threaded path to keep this test environment-independent
+    with patch("scripts.backup._find_pigz", return_value=None):
+        with patch("scripts.backup.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            with patch("scripts.backup.Path.stat") as mock_stat:
+                mock_stat.return_value = MagicMock(st_size=5 * 1024**3)
+                result = create_backup(str(home_dir), str(backup_dir), date_str="2026-05-20")
 
     mock_run.assert_called_once()
     cmd = mock_run.call_args[0][0]
     assert cmd[0] == "tar"
-    assert "czf" in cmd[1]
-    assert "2026-05-20" in cmd[2]
+    assert "czf" in cmd
+    assert any("2026-05-20" in arg for arg in cmd)
     assert str(home_dir) in cmd
+    assert result["compressor"] == "gzip"
+    assert result["threads"] == 1
 
 
 def test_create_backup_raises_on_tar_failure(tmp_path):
@@ -167,3 +171,100 @@ def test_create_backup_one_file_system_flag(tmp_path):
 
     cmd = mock_run.call_args[0][0]
     assert "--one-file-system" in cmd
+
+
+def test_create_backup_uses_pigz_when_available(tmp_path):
+    """When pigz is on PATH, tar -I 'pigz -p N' is used (parallel compression)."""
+    home_dir = tmp_path / "home"
+    home_dir.mkdir()
+    backup_dir = tmp_path / "backup"
+    backup_dir.mkdir()
+
+    with patch("scripts.backup._find_pigz", return_value="/usr/bin/pigz"):
+        with patch("scripts.backup.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            with patch("scripts.backup.Path.stat") as mock_stat:
+                mock_stat.return_value = MagicMock(st_size=1024)
+                result = create_backup(
+                    str(home_dir), str(backup_dir),
+                    date_str="2026-05-20", threads=8,
+                )
+
+    cmd = mock_run.call_args[0][0]
+    assert cmd[0] == "tar"
+    assert "-I" in cmd
+    i_idx = cmd.index("-I")
+    # tar -I argument is a shell-style program spec
+    assert "pigz" in cmd[i_idx + 1]
+    assert "-p 8" in cmd[i_idx + 1]
+    # czf is NOT used in the pigz path
+    assert "czf" not in cmd
+    assert result["compressor"] == "pigz"
+    assert result["threads"] == 8
+
+
+def test_create_backup_defaults_threads_to_cpu_count(tmp_path):
+    """When threads is not specified, defaults to os.cpu_count()."""
+    home_dir = tmp_path / "home"
+    home_dir.mkdir()
+    backup_dir = tmp_path / "backup"
+    backup_dir.mkdir()
+
+    with patch("scripts.backup._find_pigz", return_value="/usr/bin/pigz"):
+        with patch("scripts.backup.os.cpu_count", return_value=12):
+            with patch("scripts.backup.subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0)
+                with patch("scripts.backup.Path.stat") as mock_stat:
+                    mock_stat.return_value = MagicMock(st_size=1024)
+                    result = create_backup(str(home_dir), str(backup_dir), date_str="2026-05-20")
+
+    cmd = mock_run.call_args[0][0]
+    i_idx = cmd.index("-I")
+    assert "-p 12" in cmd[i_idx + 1]
+    assert result["threads"] == 12
+
+
+def test_create_backup_falls_back_to_gzip_when_pigz_missing(tmp_path):
+    """Without pigz, single-threaded gzip via tar czf is used."""
+    home_dir = tmp_path / "home"
+    home_dir.mkdir()
+    backup_dir = tmp_path / "backup"
+    backup_dir.mkdir()
+
+    with patch("scripts.backup._find_pigz", return_value=None):
+        with patch("scripts.backup.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            with patch("scripts.backup.Path.stat") as mock_stat:
+                mock_stat.return_value = MagicMock(st_size=1024)
+                result = create_backup(
+                    str(home_dir), str(backup_dir),
+                    date_str="2026-05-20", threads=16,
+                )
+
+    cmd = mock_run.call_args[0][0]
+    assert "czf" in cmd
+    assert "-I" not in cmd
+    assert result["compressor"] == "gzip"
+    # threads field reflects what was actually used (1 for single-threaded gzip)
+    assert result["threads"] == 1
+
+
+def test_create_backup_pigz_threads_clamped_to_minimum_1(tmp_path):
+    """threads=0 or negative must coerce to a sensible default."""
+    home_dir = tmp_path / "home"
+    home_dir.mkdir()
+    backup_dir = tmp_path / "backup"
+    backup_dir.mkdir()
+
+    with patch("scripts.backup._find_pigz", return_value="/usr/bin/pigz"):
+        with patch("scripts.backup.os.cpu_count", return_value=4):
+            with patch("scripts.backup.subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0)
+                with patch("scripts.backup.Path.stat") as mock_stat:
+                    mock_stat.return_value = MagicMock(st_size=1024)
+                    result = create_backup(
+                        str(home_dir), str(backup_dir),
+                        date_str="2026-05-20", threads=0,
+                    )
+
+    assert result["threads"] == 4  # fell back to cpu_count()

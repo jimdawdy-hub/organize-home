@@ -15,6 +15,8 @@ If any are missing, print install instructions and stop:
 - exiftool: `sudo pacman -S perl-image-exiftool` (Arch) or `sudo apt install libimage-exiftool-perl`
 - tar, file: pre-installed on Linux
 
+**Optional but strongly recommended**: `pigz` (parallel gzip). When present, the backup uses all CPU cores for compression — dramatically faster on multi-core machines. Install with `sudo pacman -S pigz` (Arch) or `sudo apt install pigz` (Debian/Ubuntu). Without pigz, backup falls back to single-threaded gzip.
+
 Verify Python packages:
 ```bash
 python3 -c "import pypdf, docx, PIL"

@@ -25,13 +25,15 @@ Runs are **resumable** — progress is saved to `~/.organize-home-state.json` an
 ### System binaries
 ```bash
 # Arch Linux
-sudo pacman -S perl-image-exiftool python-pypdf python-pillow
+sudo pacman -S perl-image-exiftool python-pypdf python-pillow pigz
 
 # Debian/Ubuntu
-sudo apt install libimage-exiftool-perl python3-pypdf python3-pil
+sudo apt install libimage-exiftool-perl python3-pypdf python3-pil pigz
 
 # tar and file are pre-installed on all Linux systems
 ```
+
+`pigz` is optional but strongly recommended — when installed, the backup phase uses all CPU cores for compression (often 4–8× faster on modern machines). Without pigz, the backup falls back to single-threaded gzip.
 
 ### Python packages
 ```bash

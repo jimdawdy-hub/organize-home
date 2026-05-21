@@ -9,7 +9,13 @@ Security/safety notes:
 - Uses --one-file-system so symlinked mounts (Steam libraries, network shares
   mounted under home) don't get pulled into the archive.
 - Always passes a timeout to subprocess.run.
+
+Performance:
+- Uses `pigz` (parallel gzip) when available, distributing compression across
+  all CPU cores. Output remains a standard .tar.gz that any gunzip can read.
+- Falls back to single-threaded gzip when pigz is not installed.
 """
+import os
 import re
 import shutil
 import subprocess
@@ -88,12 +94,45 @@ def detect_drives() -> list[dict]:
     return drives
 
 
+def _find_pigz() -> str | None:
+    """Return absolute path to pigz, or None if not installed."""
+    return shutil.which("pigz")
+
+
+def _build_tar_cmd(
+    archive_path: str,
+    home_dir: str,
+    exclude_args: list,
+    threads: int,
+    pigz_path: str | None,
+) -> list[str]:
+    """Construct the tar argv. Uses pigz for parallel compression if available.
+
+    When pigz is present:
+        tar -I 'pigz -p N' -cf <archive> --one-file-system <excludes> -- <home>
+    Otherwise:
+        tar czf <archive> --one-file-system <excludes> -- <home>
+
+    The -I flag (a.k.a. --use-compress-program) tells tar to pipe the archive
+    through the given program. Output is still a valid gzip stream, so the
+    resulting .tar.gz can be read by any gunzip/tar implementation.
+    """
+    base = ["tar"]
+    if pigz_path:
+        # pigz -p N runs N compression threads. Output is gzip-compatible.
+        base += ["-I", f"{pigz_path} -p {threads}", "-cf", archive_path]
+    else:
+        base += ["czf", archive_path]
+    return base + ["--one-file-system"] + exclude_args + ["--", home_dir]
+
+
 def create_backup(
     home_dir: str,
     backup_dir: str,
     date_str: str = None,
     extra_excludes: tuple = (),
     timeout: int = DEFAULT_TAR_TIMEOUT_SECONDS,
+    threads: int | None = None,
 ) -> dict:
     """Create a gzipped tar archive of home_dir inside backup_dir.
 
@@ -105,9 +144,11 @@ def create_backup(
         extra_excludes: Additional patterns to exclude (relative to home_dir).
             DEFAULT_EXCLUDE_PATTERNS are always applied.
         timeout: Per-process timeout in seconds.
+        threads: Number of compression threads to use. Defaults to os.cpu_count().
+            Only effective if `pigz` is installed; ignored otherwise.
 
     Returns:
-        {"archive_path": str, "size_gb": float}
+        {"archive_path": str, "size_gb": float, "compressor": "pigz"|"gzip", "threads": int}
 
     Raises:
         ValueError: If backup_dir is the same as or inside home_dir.
@@ -141,14 +182,11 @@ def create_backup(
     for pattern in all_excludes:
         exclude_args.extend(["--exclude", pattern])
 
-    # tar argv: czf <archive> --one-file-system <excludes> -- <home_dir>
-    # The `--` separator prevents a home_dir starting with `-` from being parsed
-    # as a tar option.
-    cmd = (
-        ["tar", "czf", archive_path, "--one-file-system"]
-        + exclude_args
-        + ["--", home_dir]
-    )
+    if threads is None or threads < 1:
+        threads = os.cpu_count() or 1
+    pigz_path = _find_pigz()
+
+    cmd = _build_tar_cmd(archive_path, home_dir, exclude_args, threads, pigz_path)
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
@@ -161,4 +199,9 @@ def create_backup(
         )
 
     size_gb = round(Path(archive_path).stat().st_size / 1024**3, 2)
-    return {"archive_path": archive_path, "size_gb": size_gb}
+    return {
+        "archive_path": archive_path,
+        "size_gb": size_gb,
+        "compressor": "pigz" if pigz_path else "gzip",
+        "threads": threads if pigz_path else 1,
+    }

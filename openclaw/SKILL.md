@@ -6,6 +6,7 @@ metadata:
     os: ["linux"]
     requires:
       bins: [tar, file, exiftool, python3]
+      optional_bins: [pigz]  # parallel gzip — backup falls back to single-threaded gzip if absent
 ---
 
 # organize-home
@@ -32,7 +33,7 @@ At the start of every run, check `~/.organize-home-state.json`. If it exists, re
 
 ## Phase 0: Preflight
 
-1. Verify binaries (tar, file, exiftool) and Python packages.
+1. Verify binaries (tar, file, exiftool) and Python packages. Check for optional `pigz` (parallel gzip) — recommended for faster backups on multi-core machines: `sudo pacman -S pigz` (Arch) / `sudo apt install pigz` (Debian).
 2. Detect drives:
 ```bash
 python3 -c "
