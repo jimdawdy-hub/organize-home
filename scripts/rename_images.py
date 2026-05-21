@@ -31,11 +31,17 @@ def is_non_descriptive(stem: str) -> bool:
 
 
 def get_exif_date(path: str) -> str | None:
-    """Return YYYY-MM-DD from EXIF DateTimeOriginal, or None."""
-    result = subprocess.run(
-        ["exiftool", "-DateTimeOriginal", "-s3", path],
-        capture_output=True, text=True
-    )
+    """Return YYYY-MM-DD from EXIF DateTimeOriginal, or None.
+
+    Bounded at 10s — a malformed image can hang exiftool indefinitely.
+    """
+    try:
+        result = subprocess.run(
+            ["exiftool", "-DateTimeOriginal", "-s3", "--", path],
+            capture_output=True, text=True, timeout=10
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return None
     if result.returncode != 0 or not result.stdout.strip():
         return None
     raw = result.stdout.strip()  # e.g. "2023:06:15 14:30:00"

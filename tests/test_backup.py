@@ -77,3 +77,93 @@ def test_create_backup_raises_on_tar_failure(tmp_path):
         mock_run.return_value = MagicMock(returncode=1, stderr="No space left")
         with pytest.raises(RuntimeError, match="tar failed"):
             create_backup(str(home_dir), str(tmp_path / "backup"), date_str="2026-05-20")
+
+
+def test_create_backup_rejects_destination_inside_home(tmp_path):
+    """Backing up into a subdir of home would loop the growing archive into itself."""
+    home_dir = tmp_path / "home"
+    home_dir.mkdir()
+    inside = home_dir / "backups"
+    inside.mkdir()
+    with pytest.raises(ValueError, match="inside home"):
+        create_backup(str(home_dir), str(inside), date_str="2026-05-20")
+
+
+def test_create_backup_rejects_destination_equal_to_home(tmp_path):
+    home_dir = tmp_path / "home"
+    home_dir.mkdir()
+    with pytest.raises(ValueError, match="home directory itself"):
+        create_backup(str(home_dir), str(home_dir), date_str="2026-05-20")
+
+
+def test_create_backup_uses_separator_to_block_arg_injection(tmp_path):
+    """`tar` argv must use -- before the path to prevent filename-as-option."""
+    home_dir = tmp_path / "home"
+    home_dir.mkdir()
+    backup_dir = tmp_path / "backup"
+    backup_dir.mkdir()
+
+    with patch("scripts.backup.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0)
+        with patch("scripts.backup.Path.stat") as mock_stat:
+            mock_stat.return_value = MagicMock(st_size=1024)
+            create_backup(str(home_dir), str(backup_dir), date_str="2026-05-20")
+
+    cmd = mock_run.call_args[0][0]
+    assert "--" in cmd
+    # The home_dir argument must come AFTER --
+    assert cmd.index("--") < cmd.index(str(home_dir))
+
+
+def test_create_backup_includes_default_excludes(tmp_path):
+    """Common cache/junk paths must be excluded by default."""
+    home_dir = tmp_path / "home"
+    home_dir.mkdir()
+    backup_dir = tmp_path / "backup"
+    backup_dir.mkdir()
+
+    with patch("scripts.backup.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0)
+        with patch("scripts.backup.Path.stat") as mock_stat:
+            mock_stat.return_value = MagicMock(st_size=1024)
+            create_backup(str(home_dir), str(backup_dir), date_str="2026-05-20")
+
+    cmd = mock_run.call_args[0][0]
+    joined = " ".join(cmd)
+    assert ".cache" in joined
+    assert "node_modules" in joined
+    assert "Trash" in joined
+
+
+def test_create_backup_passes_timeout(tmp_path):
+    """subprocess.run must be called with a timeout."""
+    home_dir = tmp_path / "home"
+    home_dir.mkdir()
+    backup_dir = tmp_path / "backup"
+    backup_dir.mkdir()
+
+    with patch("scripts.backup.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0)
+        with patch("scripts.backup.Path.stat") as mock_stat:
+            mock_stat.return_value = MagicMock(st_size=1024)
+            create_backup(str(home_dir), str(backup_dir), date_str="2026-05-20")
+
+    assert "timeout" in mock_run.call_args.kwargs
+    assert mock_run.call_args.kwargs["timeout"] > 0
+
+
+def test_create_backup_one_file_system_flag(tmp_path):
+    """tar must not cross filesystem boundaries (avoids backing up /mnt mounts)."""
+    home_dir = tmp_path / "home"
+    home_dir.mkdir()
+    backup_dir = tmp_path / "backup"
+    backup_dir.mkdir()
+
+    with patch("scripts.backup.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0)
+        with patch("scripts.backup.Path.stat") as mock_stat:
+            mock_stat.return_value = MagicMock(st_size=1024)
+            create_backup(str(home_dir), str(backup_dir), date_str="2026-05-20")
+
+    cmd = mock_run.call_args[0][0]
+    assert "--one-file-system" in cmd
