@@ -1,0 +1,40 @@
+{
+  "folders": [
+    {
+      "name": "organize-home (source)",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "python.defaultInterpreterPath": "/usr/bin/python",
+    "python.testing.pytestEnabled": true,
+    "python.testing.pytestArgs": ["tests"],
+    "python.analysis.typeCheckingMode": "basic",
+    "files.associations": {
+      "SKILL.md": "markdown",
+      "*.code-workspace": "jsonc"
+    },
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/.pytest_cache": true,
+      "**/*.pyc": true,
+      "**/.git": false
+    },
+    "search.exclude": {
+      "**/__pycache__": true,
+      "**/.pytest_cache": true,
+      "docs/superpowers/specs": false,
+      "docs/superpowers/plans": false
+    },
+    "terminal.integrated.cwd": "${workspaceFolder:organize-home (source)}"
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-python.python",
+      "ms-python.vscode-pylance",
+      "ms-python.debugpy",
+      "redhat.vscode-yaml",
+      "yzhang.markdown-all-in-one"
+    ]
+  }
+}
