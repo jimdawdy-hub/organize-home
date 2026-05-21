@@ -46,28 +46,128 @@ def test_extract_unknown_extension_returns_none(tmp_path):
     assert result is None
 
 
-def test_record_result_saves_to_state(tmp_path, state_file):
+@pytest.fixture
+def fake_home(tmp_path):
+    h = tmp_path / "jim"
+    (h / "Downloads").mkdir(parents=True)
+    return h
+
+
+def test_record_result_saves_to_state(fake_home, state_file):
     sm = StateManager(state_file)
     record_result(
-        path="/home/user/Downloads/mystery.pdf",
-        result={"category": "Legal", "folder": "/home/user/Legal",
+        path=str(fake_home / "Downloads" / "mystery.pdf"),
+        result={"category": "Legal", "folder": str(fake_home / "Legal"),
                 "confidence": 0.85, "reason": "Contract language"},
         state=sm,
+        home_dir=str(fake_home),
     )
     data = sm.load()
     assert len(data["moves"]) == 1
-    assert data["moves"][0]["from"] == "/home/user/Downloads/mystery.pdf"
-    assert data["moves"][0]["to"] == "/home/user/Legal"
+    assert data["moves"][0]["to"] == str(fake_home / "Legal")
 
 
-def test_record_low_confidence_goes_to_queue(tmp_path, state_file):
+def test_record_low_confidence_goes_to_queue(fake_home, state_file):
     sm = StateManager(state_file)
     record_result(
-        path="/home/user/Downloads/mystery.pdf",
-        result={"category": "Unknown", "folder": "/home/user/Human Review",
+        path=str(fake_home / "Downloads" / "mystery.pdf"),
+        result={"category": "Unknown", "folder": str(fake_home / "Human Review"),
                 "confidence": 0.2, "reason": "Cannot determine"},
         state=sm,
+        home_dir=str(fake_home),
     )
     data = sm.load()
     assert len(data["low_confidence"]) == 1
     assert data["low_confidence"][0]["confidence"] == 0.2
+
+
+def test_record_rejects_folder_outside_home(fake_home, state_file):
+    """AI prompt injection attempt: folder points outside home → forced to low-confidence."""
+    sm = StateManager(state_file)
+    record_result(
+        path=str(fake_home / "Downloads" / "evil.pdf"),
+        result={"category": "Legal", "folder": "/etc/cron.d",
+                "confidence": 0.95, "reason": "Standard config"},
+        state=sm,
+        home_dir=str(fake_home),
+    )
+    data = sm.load()
+    assert len(data["moves"]) == 0  # NOT moved
+    assert len(data["low_confidence"]) == 1
+    assert "unsafe" in data["low_confidence"][0]["reason"].lower()
+
+
+def test_record_rejects_dotdir_folder(fake_home, state_file):
+    """AI returning ~/.ssh/ as folder must be rejected."""
+    sm = StateManager(state_file)
+    record_result(
+        path=str(fake_home / "Downloads" / "evil.pdf"),
+        result={"category": "Config", "folder": str(fake_home / ".ssh"),
+                "confidence": 0.95, "reason": "SSH config"},
+        state=sm,
+        home_dir=str(fake_home),
+    )
+    data = sm.load()
+    assert len(data["moves"]) == 0
+    assert len(data["low_confidence"]) == 1
+
+
+def test_record_clamps_high_confidence(fake_home, state_file):
+    """Confidence > 1.0 must be clamped to 1.0, not raise."""
+    sm = StateManager(state_file)
+    record_result(
+        path=str(fake_home / "Downloads" / "doc.pdf"),
+        result={"category": "Legal", "folder": str(fake_home / "Legal"),
+                "confidence": 1.5, "reason": "Very confident"},
+        state=sm,
+        home_dir=str(fake_home),
+    )
+    # Treated as valid high confidence (clamped)
+    assert len(sm.load()["moves"]) == 1
+
+
+def test_record_clamps_negative_confidence(fake_home, state_file):
+    """Confidence < 0 must be treated as 0 (lowest), routed to low-confidence."""
+    sm = StateManager(state_file)
+    record_result(
+        path=str(fake_home / "Downloads" / "doc.pdf"),
+        result={"category": "Legal", "folder": str(fake_home / "Legal"),
+                "confidence": -0.5, "reason": "weird"},
+        state=sm,
+        home_dir=str(fake_home),
+    )
+    data = sm.load()
+    assert len(data["moves"]) == 0
+    assert len(data["low_confidence"]) == 1
+    assert data["low_confidence"][0]["confidence"] == 0.0
+
+
+def test_record_handles_non_numeric_confidence(fake_home, state_file):
+    """A non-numeric confidence (AI returns a string) must not crash."""
+    sm = StateManager(state_file)
+    record_result(
+        path=str(fake_home / "Downloads" / "doc.pdf"),
+        result={"category": "Legal", "folder": str(fake_home / "Legal"),
+                "confidence": "high", "reason": "..."},
+        state=sm,
+        home_dir=str(fake_home),
+    )
+    # Should treat as 0 and route to low-confidence
+    data = sm.load()
+    assert len(data["moves"]) == 0
+    assert len(data["low_confidence"]) == 1
+
+
+def test_record_handles_missing_keys(fake_home, state_file):
+    """A malformed result missing 'folder' must not crash."""
+    sm = StateManager(state_file)
+    record_result(
+        path=str(fake_home / "Downloads" / "doc.pdf"),
+        result={"confidence": 0.9},
+        state=sm,
+        home_dir=str(fake_home),
+    )
+    data = sm.load()
+    # Missing folder → can't validate → low-confidence with error
+    assert len(data["moves"]) == 0
+    assert len(data["low_confidence"]) == 1

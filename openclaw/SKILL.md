@@ -107,8 +107,8 @@ Load `~/organize-home/references/rules.md` now for categorization guidance.
 For each file in `/tmp/unrouted.json` with extension `.pdf .doc .docx .txt .md .odt .rtf`:
 1. `python3 $HOME/organize-home/scripts/ai_review.py --extract "/path/to/file"` → get text
 2. Review text, decide: `{"category":"...","folder":"...","confidence":0.0–1.0,"reason":"..."}`
-3. `python3 $HOME/organize-home/scripts/ai_review.py --record "/path/to/file" '<json>'`
-4. confidence > 0.5 → move file now; ≤ 0.5 → leave for clarification
+3. `python3 $HOME/organize-home/scripts/ai_review.py --record "/path/to/file" '<json>' --home "$HOME"` — `--home` is required so the script can reject AI-proposed unsafe folders (outside home, dotfile dirs)
+4. confidence > 0.5 AND folder is safe → move file now; ≤ 0.5 OR unsafe folder → leave for clarification
 
 Mark phase 5 complete.
 

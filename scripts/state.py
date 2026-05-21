@@ -2,11 +2,13 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+SCHEMA_VERSION = 1
+
 
 def _default_state() -> dict:
     """Return a fresh default state dict. Must be a function to avoid sharing mutable defaults."""
     return {
-        "version": 1,
+        "version": SCHEMA_VERSION,
         "started_at": None,
         "backup_path": None,
         "vision": None,
@@ -20,6 +22,40 @@ def _default_state() -> dict:
 DEFAULT_STATE = _default_state()  # For backward compatibility
 
 
+class StateCorruptError(Exception):
+    """Raised when the state file is unreadable or fails schema validation."""
+
+
+def _validate_schema(data: dict) -> None:
+    """Raise StateCorruptError if data does not match the expected schema.
+
+    Checks types of top-level fields. Does NOT inspect every list element to keep
+    the cost low — a malformed entry in `moves` will only be noticed when used.
+    """
+    if not isinstance(data, dict):
+        raise StateCorruptError(f"state must be a JSON object, got {type(data).__name__}")
+    expected_types = {
+        "version": int,
+        "completed_phases": list,
+        "moves": list,
+        "low_confidence": list,
+        "errors": list,
+    }
+    for key, expected in expected_types.items():
+        if key not in data:
+            continue
+        if not isinstance(data[key], expected):
+            raise StateCorruptError(
+                f"field {key!r} expected {expected.__name__}, got {type(data[key]).__name__}"
+            )
+    version = data.get("version")
+    if version is not None and version != SCHEMA_VERSION:
+        raise StateCorruptError(
+            f"unsupported state version {version!r} (expected {SCHEMA_VERSION}). "
+            "Delete ~/.organize-home-state.json to start fresh."
+        )
+
+
 class StateManager:
     def __init__(self, path: Path | str = None):
         if path is None:
@@ -29,8 +65,12 @@ class StateManager:
     def load(self) -> dict:
         if not self.path.exists():
             return _default_state()
-        with self.path.open() as f:
-            data = json.load(f)
+        try:
+            with self.path.open() as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError) as exc:
+            raise StateCorruptError(f"could not parse state file {self.path}: {exc}")
+        _validate_schema(data)
         defaults = _default_state()
         for k, v in defaults.items():
             data.setdefault(k, v)

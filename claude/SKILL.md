@@ -120,14 +120,17 @@ For each file in `/tmp/unrouted.json` with extension in `.pdf .doc .docx .txt .m
 python3 $HOME/organize-home/scripts/ai_review.py --extract "/path/to/file"
 ```
 
-Review the extracted text. Decide category and confidence. Then record:
+Review the extracted text. Decide category and confidence. Then record (must include `--home` for safety validation):
 ```bash
 python3 $HOME/organize-home/scripts/ai_review.py --record "/path/to/file" \
-  "{\"category\":\"Legal\",\"folder\":\"$HOME/Legal\",\"confidence\":0.85,\"reason\":\"Contract language\"}"
+  "{\"category\":\"Legal\",\"folder\":\"$HOME/Legal\",\"confidence\":0.85,\"reason\":\"Contract language\"}" \
+  --home "$HOME"
 ```
 
-If confidence > 0.5: move the file now with `mv` or `shutil.move`.
-If confidence ≤ 0.5: do NOT move the file. It is queued.
+The script validates that the `folder` is a safe destination under home (not outside, not a dotfile dir). If it isn't safe, the record is forced into the low-confidence queue regardless of the stated confidence.
+
+If confidence > 0.5 AND folder is safe: move the file now with `mv` or `shutil.move`.
+If confidence ≤ 0.5 OR folder is unsafe: do NOT move the file. It is queued.
 
 Mark phase 5 complete.
 

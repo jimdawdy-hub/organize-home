@@ -1,12 +1,27 @@
 """Document first-page text extractor and AI review result recorder.
 
 CLI modes:
-  --extract <path>               Print first-page text to stdout (for agent to review)
-  --record <path> <json_result>  Record agent's categorization result into state file
+  --extract <path>
+      Print first-page text to stdout (for agent to review)
+  --record <path> <json_result> --home <home_dir> [--state <state_path>]
+      Record agent's categorization result into state file. The folder named in
+      <json_result> is validated to be a safe destination under <home_dir>; if it
+      is not, the file is queued for human review instead of being marked for move.
+
+Safety:
+  - AI-returned `folder` field is validated with safety.is_safe_destination;
+    folders outside home or with any dot-prefixed component are rejected and the
+    record is forced into the low_confidence queue.
+  - confidence is clamped to [0.0, 1.0] and non-numeric values are treated as 0.
 """
 import json
 import sys
 from pathlib import Path
+
+try:
+    from scripts.safety import is_safe_destination
+except ImportError:
+    from safety import is_safe_destination
 
 TEXT_EXTENSIONS = {".txt", ".md", ".rst", ".csv", ".log"}
 REVIEWABLE_EXTENSIONS = {".pdf", ".doc", ".docx", ".odt", ".rtf"} | TEXT_EXTENSIONS
@@ -70,41 +85,96 @@ def _extract_raw_fallback(path: str) -> str:
         return ""
 
 
-def record_result(path: str, result: dict, state) -> None:
+def _clamp_confidence(value) -> float:
+    """Coerce `value` into [0.0, 1.0]. Non-numeric values become 0.0."""
+    try:
+        c = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if c != c:  # NaN
+        return 0.0
+    return max(0.0, min(1.0, c))
+
+
+def record_result(path: str, result: dict, state, home_dir: str = None) -> None:
     """Record AI categorization result into state.
 
-    High confidence (>0.5): logged as pending move (agent will move the file).
-    Low confidence (<=0.5): added to low_confidence queue.
+    Args:
+        home_dir: If provided, the folder named in `result` is validated with
+            is_safe_destination. Folders that fail validation force the record
+            into the low_confidence queue regardless of stated confidence.
+
+    Routing:
+        confidence > 0.5 AND folder is safe → state.add_move (queued for actual move)
+        confidence ≤ 0.5 OR folder is unsafe/missing → state.add_low_confidence
     """
-    confidence = result.get("confidence", 0)
+    confidence = _clamp_confidence(result.get("confidence", 0))
+    folder = result.get("folder") or ""
+    category = result.get("category", "")
+    reason = result.get("reason", "")
+
+    folder_safe = False
+    if folder and home_dir:
+        folder_safe = is_safe_destination(folder, home_dir)
+    elif folder and not home_dir:
+        # No home_dir to validate against — accept legacy behavior but flag it
+        folder_safe = True
+
+    if not folder:
+        state.add_low_confidence(path, "", confidence,
+                                 f"AI result missing 'folder' field; reason: {reason}")
+        return
+
+    if not folder_safe:
+        state.add_low_confidence(
+            path, folder, confidence,
+            f"AI proposed unsafe destination {folder!r}; reason: {reason}"
+        )
+        return
+
     if confidence > 0.5:
-        state.add_move(path, result["folder"], phase=5, rule=f"ai:{result['category']}")
+        state.add_move(path, folder, phase=5, rule=f"ai:{category}")
     else:
-        state.add_low_confidence(path, result.get("folder", ""), confidence, result.get("reason", ""))
+        state.add_low_confidence(path, folder, confidence, reason)
+
+
+def _load_state_manager(state_path: str | None):
+    """Import StateManager with fallback for script vs. module invocation."""
+    try:
+        from scripts.state import StateManager
+    except ImportError:
+        from state import StateManager
+    return StateManager(state_path) if state_path else StateManager()
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: ai_review.py --extract <path> | --record <path> <json>")
-        sys.exit(1)
+    import argparse
 
-    mode = sys.argv[1]
-    if mode == "--extract":
+    if len(sys.argv) >= 2 and sys.argv[1] == "--extract":
+        if len(sys.argv) < 3:
+            print(json.dumps({"error": "missing path argument"}))
+            sys.exit(1)
         text = extract_first_page(sys.argv[2])
         if text is None:
             print(json.dumps({"error": "unsupported file type"}))
         else:
             print(json.dumps({"text": text}))
-    elif mode == "--record":
-        try:
-            from scripts.state import StateManager
-        except ImportError:
-            # When run as a script, need relative import
-            from state import StateManager
-        result = json.loads(sys.argv[3])
-        sm = StateManager()
-        record_result(sys.argv[2], result, sm)
+        sys.exit(0)
+
+    if len(sys.argv) >= 2 and sys.argv[1] == "--record":
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--record", required=True, help="path of file being categorized")
+        parser.add_argument("json_result", help="JSON-encoded categorization result")
+        parser.add_argument("--home", required=True, help="home directory for safety validation")
+        parser.add_argument("--state", default=None, help="state file path (default: ~/.organize-home-state.json)")
+        args = parser.parse_args()
+        result = json.loads(args.json_result)
+        sm = _load_state_manager(args.state)
+        record_result(args.record, result, sm, home_dir=args.home)
         print(json.dumps({"ok": True}))
-    else:
-        print(f"Unknown mode: {mode}")
-        sys.exit(1)
+        sys.exit(0)
+
+    print("Usage:")
+    print("  ai_review.py --extract <path>")
+    print("  ai_review.py --record <path> <json> --home <home_dir> [--state <state_path>]")
+    sys.exit(1)
