@@ -123,7 +123,7 @@ python3 $HOME/organize-home/scripts/ai_review.py --extract "/path/to/file"
 Review the extracted text. Decide category and confidence. Then record:
 ```bash
 python3 $HOME/organize-home/scripts/ai_review.py --record "/path/to/file" \
-  '{"category":"Legal","folder":"/home/user/Legal","confidence":0.85,"reason":"Contract language"}'
+  "{\"category\":\"Legal\",\"folder\":\"$HOME/Legal\",\"confidence\":0.85,\"reason\":\"Contract language\"}"
 ```
 
 If confidence > 0.5: move the file now with `mv` or `shutil.move`.
