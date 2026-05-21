@@ -2,6 +2,8 @@
 
 A multi-platform AI skill that organizes your Linux home directory: backs it up, sorts files into typed folders, uses AI to categorize documents, renames unnamed images, and generates a browsable HTML index.
 
+> **Safety:** Hidden files and folders (`.ssh`, `.gnupg`, `.config`, dotfiles, etc.) are never touched. All AI-proposed destinations are validated against a safety blocklist. See [SECURITY.md](SECURITY.md) for the threat model and full list of safeguards.
+
 ## What it does
 
 | Phase | Action |
@@ -121,6 +123,15 @@ Images with non-descriptive names (all digits, camera defaults like `IMG_1234`, 
 2. AI description (if vision-capable model) → `red-barn-winter-snowfall.jpg`
 3. File modification date → `2024-03-15_001.jpg`
 
+## Recovering from an interrupted run
+
+If you `Ctrl-C` mid-phase, the state file at `~/.organize-home-state.json` reflects partial progress. You have two options:
+
+1. **Resume**: just invoke the skill again — completed phases are skipped automatically.
+2. **Restore from backup**: extract `~/.../home-backup-YYYY-MM-DD.tar.gz` to recover the original layout, then delete `~/.organize-home-state.json` to start fresh.
+
+If `~/home-index.html` was generated, it lists every move that was recorded.
+
 ## Running the tests
 
 ```bash
@@ -129,4 +140,15 @@ pip install pytest pypdf python-docx Pillow
 python -m pytest
 ```
 
-53 tests across all scripts.
+97 tests across all scripts, including security/edge-case tests for XSS, command injection, AI prompt injection, symlink escape, dotfile handling, TOCTOU, cross-filesystem moves, state corruption, and confidence clamping.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for the full threat model and list of safeguards. Highlights:
+
+- Hidden files (`.ssh`, `.gnupg`, `.config`, etc.) are never indexed or moved
+- AI-proposed destinations are validated — folders outside home or in dotfile dirs are rejected
+- Filenames in the HTML report are HTML-escaped; copyable shell commands use `shlex.quote()`
+- Backups refuse destinations inside home (no archive-included-in-itself loops)
+- All subprocess calls have explicit timeouts
+- State file is schema-validated on load — corrupted state raises an explicit error
