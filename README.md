@@ -20,6 +20,27 @@ A multi-platform AI skill that organizes your Linux home directory: backs it up,
 
 Runs are **resumable** — progress is saved to `~/.organize-home-state.json` and any interrupted run picks up where it left off.
 
+If you want to resume explicitly after a completed backup, use:
+
+```bash
+python3 ~/organize-home/scripts/resume_workflow.py --home "$HOME"
+```
+
+If the state file was lost but the backup archive exists, rebuild the phase-1
+state first:
+
+```bash
+python3 ~/organize-home/scripts/resume_workflow.py --home "$HOME" \
+  --bootstrap-backup /mnt/data/home-backup-2026-05-20.tar.gz
+```
+
+To search common mount paths for the latest `home-backup-*.tar.gz`, omit the
+archive path:
+
+```bash
+python3 ~/organize-home/scripts/resume_workflow.py --home "$HOME" --bootstrap-backup
+```
+
 ## Requirements
 
 ### System binaries
@@ -108,12 +129,24 @@ Files are sorted in this order (first match wins):
 
 | File type | Destination |
 |-----------|-------------|
+| Filenames containing `bank statement` in `~/Downloads/` | `~/Financial/` |
+| Filenames containing `DMR` in `~/Downloads/` | `~/HamRadio/` |
+| Filenames containing `letter` in `~/Downloads/` | `~/Correspondence/` |
+| Filenames containing `name-labeled` and `CV` in `~/Downloads/` | `~/Career/` |
+| Filenames containing `name-labeled` in `~/Downloads/` and not otherwise classified | `~/Personal/` |
+| Filenames that look like a case citation in `~/Downloads/` | `~/Legal Reference/` |
+| Filenames containing `Med Recs`, `Bills`, `Deposition`, or `transcript` in `~/Downloads/` | `~/Medical Files/` |
+| Filenames containing `motion`, `order`, `orders`, `Advocate`, `pltf`, `Court`, `Ct`, `Def`, `Plainitff`, or `Response` in `~/Downloads/` | `~/Legal Filings/` |
 | `.zip .gz .bz2 .xz .7z .rar .tar` | `~/Zip Archive/` |
 | `.eml .msg` | `~/Emails/` |
 | `.epub .mobi .azw3` | `~/Books/` |
 | Executables in `~/Downloads/` | `~/Downloads/ExecFiles/` |
 | Images in `~`, `~/Downloads/`, `~/Documents/` | `~/Pictures/` |
 | PDFs, Word docs, text files | AI-reviewed, routed by content |
+
+Downloads filename routing is intentionally case-insensitive and uses simple substring matching: if the rule text appears anywhere in the filename, it counts. This wins before the generic file-type rules above.
+`name-labeled` by itself is handled in the AI review phase as a fallback to `~/Personal/` when nothing more specific matches.
+`Med Recs`, `Bills`, `Deposition`, and `transcript` in `~/Downloads/` route to `~/Medical Files/` before broader legal rules, including embedded forms like `dmr3.csv`.
 
 The AI creates new first-level folders as needed (e.g., `~/Family/`, `~/Financial/`). Files it can't categorize with >50% confidence are highlighted in the HTML report for your review.
 

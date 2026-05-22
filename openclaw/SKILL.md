@@ -29,6 +29,24 @@ Before Phase 4, test whether you have image description capability:
 At the start of every run, check `~/.organize-home-state.json`. If it exists, read
 `completed_phases` and skip those phases. Tell the user: "Resuming from phase N."
 
+If the backup is already complete and you want to continue the workflow without
+re-running phase 1, use:
+
+```bash
+python3 ~/organize-home/scripts/resume_workflow.py --home "$HOME"
+```
+
+If `~/.organize-home-state.json` was lost but the backup archive exists, rebuild
+phase-1 state and then resume:
+
+```bash
+python3 ~/organize-home/scripts/resume_workflow.py --home "$HOME" \
+  --bootstrap-backup /mnt/data/home-backup-2026-05-20.tar.gz
+```
+
+Use `--bootstrap-backup` without a path to search common mount paths for the
+latest `home-backup-*.tar.gz`.
+
 ---
 
 ## Phase 0: Preflight

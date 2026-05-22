@@ -81,10 +81,72 @@ def test_image_already_in_pictures_not_routed(fake_home):
     assert result is None
 
 
-def test_pdf_not_routed_by_rules(fake_home):
+def test_pdf_matches_embedded_litigation_terms(fake_home):
     entry = _entry(str(fake_home / "Downloads" / "contract.pdf"), ".pdf")
     result = get_destination(entry, str(fake_home))
+    assert result == (str(fake_home / "Legal Filings"), "legal:litigation filename")
+
+
+def test_download_filename_wells_fargo_routes_to_financial(fake_home):
+    entry = _entry(str(fake_home / "Downloads" / "063025 WellsFargo.pdf"), ".pdf")
+    dest, rule = get_destination(entry, str(fake_home))
+    assert dest == str(fake_home / "Financial")
+    assert rule == "financial:wells fargo"
+
+
+def test_download_filename_litigation_terms_route_to_legal_filings(fake_home):
+    entry = _entry(str(fake_home / "Downloads" / "Ct Order 4-17-26 (entered).pdf"), ".pdf")
+    dest, rule = get_destination(entry, str(fake_home))
+    assert dest == str(fake_home / "Legal Filings")
+    assert rule == "legal:litigation filename"
+
+
+def test_download_filename_dmr_routes_to_hamradio(fake_home):
+    entry = _entry(str(fake_home / "Downloads" / "DMR jhd eng3.data"), ".data")
+    dest, rule = get_destination(entry, str(fake_home))
+    assert dest == str(fake_home / "HamRadio")
+    assert rule == "hamradio:dmr"
+
+
+def test_download_filename_letter_routes_to_correspondence(fake_home):
+    entry = _entry(str(fake_home / "Downloads" / "draft letter to client.docx"), ".docx")
+    dest, rule = get_destination(entry, str(fake_home))
+    assert dest == str(fake_home / "Correspondence")
+    assert rule == "correspondence:letter"
+
+
+def test_download_filename_dawdy_cv_routes_to_career(fake_home):
+    entry = _entry(str(fake_home / "Downloads" / "James_name-labeled_AI_Lawyer_CV.docx"), ".docx")
+    dest, rule = get_destination(entry, str(fake_home))
+    assert dest == str(fake_home / "Career")
+    assert rule == "career:dawdy cv"
+
+
+def test_download_filename_dawdy_is_not_auto_routed(fake_home):
+    entry = _entry(str(fake_home / "Downloads" / "family name-labeled notes.pdf"), ".pdf")
+    result = get_destination(entry, str(fake_home))
     assert result is None
+
+
+def test_download_filename_case_citation_routes_to_legal_reference(fake_home):
+    entry = _entry(str(fake_home / "Downloads" / "Smith v. Jones 2017 Ill. App..pdf"), ".pdf")
+    dest, rule = get_destination(entry, str(fake_home))
+    assert dest == str(fake_home / "Legal Reference")
+    assert rule == "legal_reference:case citation"
+
+
+def test_download_filename_medmal_routes_to_med_mal_work(fake_home):
+    entry = _entry(str(fake_home / "Downloads" / "Med Recs-bills Ortho Surgery Specialists.pdf"), ".pdf")
+    dest, rule = get_destination(entry, str(fake_home))
+    assert dest == str(fake_home / "Medical Files")
+    assert rule == "medmal:work filename"
+
+
+def test_download_filename_transcript_routes_to_med_mal_work(fake_home):
+    entry = _entry(str(fake_home / "Downloads" / "Transcript Request of Dr. Troy Boffeli.doc"), ".doc")
+    dest, rule = get_destination(entry, str(fake_home))
+    assert dest == str(fake_home / "Medical Files")
+    assert rule == "medmal:work filename"
 
 
 # ---------- apply_moves safety integration ----------

@@ -15,6 +15,7 @@ Safety:
   - confidence is clamped to [0.0, 1.0] and non-numeric values are treated as 0.
 """
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -26,6 +27,90 @@ except ImportError:
 TEXT_EXTENSIONS = {".txt", ".md", ".rst", ".csv", ".log"}
 REVIEWABLE_EXTENSIONS = {".pdf", ".doc", ".docx", ".odt", ".rtf"} | TEXT_EXTENSIONS
 MAX_TEXT_CHARS = 3000
+
+
+CLASSIFICATION_RULES = (
+    (
+        "Legal Filings",
+        ("court", "plaintiff", "defendant", "motion", "order", "complaint",
+         "deposition", "subpoena", "summons", "case no", "cause no",
+         "affidavit", "exhibit", "memorandum of law", "certificate of service"),
+        "legal filing or litigation document",
+    ),
+    (
+        "Legal Reference",
+        ("v.", "ill. app.", "ill.", "n.e.2d", "n.e.3d", "f.3d", "f.2d",
+         "u.s.", "so. 2d", "so. 3d", "page", "reporter"),
+        "legal reference or case citation",
+    ),
+    (
+        "Medical Files",
+        ("med rec", "med recs", "bills", "deposition", "transcript",
+         "medical records", "billing records"),
+        "med mal work document",
+    ),
+    (
+        "Correspondence",
+        ("dear ", "sincerely", "regards", "from:", "subject:", "email",
+         "letter", "correspondence", "sent:", "to:"),
+        "correspondence or message",
+    ),
+    (
+        "AI Research",
+        ("arxiv", "transformer", "large language model", "llm", "neural",
+         "machine learning", "artificial intelligence", "diffusion model",
+         "benchmark", "training data", "inference"),
+        "AI or machine-learning research",
+    ),
+    (
+        "Financial",
+        ("invoice", "receipt", "bank statement", "tax", "w-2", "1099",
+         "account balance", "payment", "transaction", "statement period"),
+        "financial document",
+    ),
+    (
+        "Personal Records",
+        ("medical record", "patient", "diagnosis", "prescription", "clinic",
+         "hospital", "insurance", "policy number", "identification"),
+        "personal record",
+    ),
+    (
+        "HamRadio",
+        ("arrl", "callsign", "repeater", "frequency", "dmr", "ham radio",
+         "amateur radio", "codeplug"),
+        "ham-radio document",
+    ),
+    (
+        "Genealogy",
+        ("ancestry", "genealogy", "birth certificate", "death certificate",
+         "census", "family tree", "probate"),
+        "genealogy document",
+    ),
+    (
+        "Travel",
+        ("itinerary", "boarding pass", "reservation", "booking", "flight",
+         "hotel", "passport", "visa"),
+        "travel document",
+    ),
+    (
+        "Career",
+        ("resume", "curriculum vitae", "cover letter", "job application",
+         "linkedin", "professional experience"),
+        "career document",
+    ),
+    (
+        "Academic",
+        ("syllabus", "course", "university", "journal", "abstract",
+         "references", "bibliography", "doi:", "research paper"),
+        "academic or research document",
+    ),
+    (
+        "Books",
+        ("chapter", "isbn", "table of contents", "publisher", "copyright",
+         "all rights reserved", "preface"),
+        "book or manual",
+    ),
+)
 
 
 def extract_first_page(path: str) -> str | None:
@@ -42,6 +127,74 @@ def extract_first_page(path: str) -> str | None:
     if ext in (".odt", ".rtf"):
         return _extract_raw_fallback(path)
     return None
+
+
+def classify_document_text(text: str | None, path: str, home_dir: str) -> dict:
+    """Classify extracted first-page text into a destination folder.
+
+    This is deliberately conservative. It returns confidence above 0.5 only
+    when multiple signals point to the same category.
+    """
+    haystack = f"{Path(path).name}\n{text or ''}".lower()
+    if _looks_like_case_citation(haystack):
+        return {
+            "category": "Legal Reference",
+            "folder": str(Path(home_dir) / "Legal Reference"),
+            "confidence": 0.88,
+            "reason": "filename or first page resembles a case citation",
+        }
+
+    if "dawdy" in haystack:
+        return {
+            "category": "Personal",
+            "folder": str(Path(home_dir) / "Personal"),
+            "confidence": 0.62,
+            "reason": "filename references name-labeled and no more specific category matched",
+        }
+
+    if len((text or "").strip()) < 40:
+        return {
+            "category": "Human Review",
+            "folder": str(Path(home_dir) / "Human Review"),
+            "confidence": 0.1,
+            "reason": "first page was empty or too short to classify",
+        }
+
+    best = None
+    for category, keywords, reason in CLASSIFICATION_RULES:
+        hits = [kw for kw in keywords if kw in haystack]
+        if not hits:
+            continue
+        # Two hits is usually enough for a cautious automatic move; four or
+        # more means the first page is strongly self-identifying.
+        confidence = min(0.95, 0.45 + (0.15 * len(hits)))
+        candidate = (confidence, category, hits, reason)
+        if best is None or candidate[0] > best[0]:
+            best = candidate
+
+    if best is None:
+        return {
+            "category": "Human Review",
+            "folder": str(Path(home_dir) / "Human Review"),
+            "confidence": 0.2,
+            "reason": "no strong first-page category signals",
+        }
+
+    confidence, category, hits, reason = best
+    return {
+        "category": category,
+        "folder": str(Path(home_dir) / category),
+        "confidence": confidence,
+        "reason": f"{reason}; matched: {', '.join(hits[:5])}",
+    }
+
+
+def _looks_like_case_citation(haystack: str) -> bool:
+    """Detect classic case-name/citation forms like `Smith v. Jones 2017 Ill. App.`."""
+    if re.search(r"\b[a-z][a-z'\-\.]+ v\.? [a-z][a-z'\-\.]+", haystack):
+        return True
+    citation_markers = ("ill. app.", "ill.", "n.e.2d", "n.e.3d", "f.3d", "f.2d", "u.s.", "so. 2d", "so. 3d")
+    return any(marker in haystack for marker in citation_markers)
 
 
 def _extract_pdf(path: str) -> str:

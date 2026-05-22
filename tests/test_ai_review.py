@@ -2,7 +2,7 @@ import json
 import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-from scripts.ai_review import extract_first_page, record_result
+from scripts.ai_review import classify_document_text, extract_first_page, record_result
 from scripts.state import StateManager
 
 
@@ -37,6 +37,30 @@ def test_extract_md_returns_content(tmp_path):
     md.write_text("# Family Budget\n\nMonthly expenses for the name-labeled household.")
     result = extract_first_page(str(md))
     assert "Family Budget" in result
+
+
+def test_classify_legal_reference_document(fake_home):
+    pdf = fake_home / "Smith v. Jones 2017 Ill. App..pdf"
+    pdf.write_text("Smith v. Jones, 2017 IL App (1st) 123456\nThis is a case citation.")
+    result = classify_document_text(extract_first_page(str(pdf)), str(pdf), str(fake_home))
+    assert result["category"] == "Legal Reference"
+    assert result["folder"] == str(fake_home / "Legal Reference")
+
+
+def test_classify_med_mal_work_document(fake_home):
+    txt = fake_home / "med recs and bills.txt"
+    txt.write_text("Med Recs and Bills\nOrthopaedic surgery records and billing summary.")
+    result = classify_document_text(extract_first_page(str(txt)), str(txt), str(fake_home))
+    assert result["category"] == "Medical Files"
+    assert result["folder"] == str(fake_home / "Medical Files")
+
+
+def test_classify_dawdy_falls_back_to_personal(fake_home):
+    md = fake_home / "name-labeled notes.md"
+    md.write_text("Miscellaneous notes.")
+    result = classify_document_text(extract_first_page(str(md)), str(md), str(fake_home))
+    assert result["category"] == "Personal"
+    assert result["folder"] == str(fake_home / "Personal")
 
 
 def test_extract_unknown_extension_returns_none(tmp_path):

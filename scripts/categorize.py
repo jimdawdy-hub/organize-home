@@ -1,4 +1,5 @@
 import shutil
+import re
 from pathlib import Path
 
 try:
@@ -11,7 +12,40 @@ EMAIL_EXTS = {".eml", ".msg"}
 EBOOK_EXTS = {".epub", ".mobi", ".azw3"}
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic"}
 
+_DOWNLOAD_FILENAME_RULES = (
+    ("financial:wells fargo", "Financial", ("wells fargo", "wellsfargo")),
+    ("legal_reference:case citation", "Legal Reference", (" v ", " v. ", "ill. app.", "ill.")),
+    ("hamradio:dmr", "HamRadio", ("dmr",)),
+    ("correspondence:letter", "Correspondence", ("letter",)),
+    ("career:dawdy cv", "Career", ("dawdy cv", "cv dawdy")),
+    (
+        "medmal:work filename",
+        "Medical Files",
+        ("med recs", "med rec", "bills", "deposition", "transcript"),
+    ),
+    (
+        "legal:litigation filename",
+        "Legal Filings",
+        (
+            "motion",
+            "order",
+            "orders",
+            "advocate",
+            "pltf",
+            "court",
+            "ct",
+            "def",
+            "plainitff",
+            "response",
+        ),
+    ),
+)
+
 _IMAGE_SOURCE_DIRS = {"downloads", "documents"}
+
+
+def _matches_substring(haystack: str, needles: tuple[str, ...]) -> bool:
+    return any(needle in haystack for needle in needles)
 
 
 def get_destination(entry: dict, home_dir: str) -> tuple[str, str] | None:
@@ -23,6 +57,16 @@ def get_destination(entry: dict, home_dir: str) -> tuple[str, str] | None:
     path = Path(entry["path"])
     ext = entry["ext"].lower()
     parent_name = path.parent.name.lower()
+    filename_haystack = path.name.lower()
+
+    if parent_name == "downloads":
+        for rule_name, folder, needles in _DOWNLOAD_FILENAME_RULES:
+            if rule_name == "career:dawdy cv":
+                if _matches_substring(filename_haystack, ("dawdy",)) and _matches_substring(filename_haystack, ("cv",)):
+                    return str(home / folder), rule_name
+                continue
+            if _matches_substring(filename_haystack, needles):
+                return str(home / folder), rule_name
 
     # Archives — match anywhere under home
     if ext in ARCHIVE_EXTS:

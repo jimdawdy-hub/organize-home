@@ -95,3 +95,13 @@ def test_build_index_skips_dotfiles_in_subdirs(fake_home):
     entries = build_index(str(fake_home))
     paths = [e["path"] for e in entries]
     assert not any(".hidden_in_downloads" in p for p in paths)
+
+
+def test_build_index_skips_git_project_dirs(fake_home):
+    project = fake_home / "project"
+    project.mkdir()
+    (project / ".git").mkdir()
+    (project / "README.md").write_text("do not organize repo docs")
+    entries = build_index(str(fake_home))
+    paths = [e["path"] for e in entries]
+    assert str(project / "README.md") not in paths

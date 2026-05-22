@@ -24,7 +24,7 @@ def build_index(home_dir: str) -> list[dict]:
 
     # Depth 1: visible files in visible immediate subdirectories
     for subdir in home.iterdir():
-        if subdir.name.startswith("."):
+        if _should_skip_dir(subdir):
             continue
         if subdir.is_dir(follow_symlinks=False):
             for item in subdir.iterdir():
@@ -34,6 +34,11 @@ def build_index(home_dir: str) -> list[dict]:
                     entries.append(_make_entry(item))
 
     return entries
+
+
+def _should_skip_dir(path: Path) -> bool:
+    """Skip hidden folders and Git project roots."""
+    return path.name.startswith(".") or (path / ".git").is_dir()
 
 
 def _make_entry(path: Path) -> dict:
