@@ -509,7 +509,7 @@ from scripts.index_files import build_index, save_index, load_index
 
 @pytest.fixture
 def fake_home(tmp_path):
-    home = tmp_path / "jim"
+    home = tmp_path / "user"
     home.mkdir()
     (home / "Downloads").mkdir()
     (home / "Documents").mkdir()
@@ -673,7 +673,7 @@ from scripts.categorize import get_destination, ARCHIVE_EXTS, EMAIL_EXTS, EBOOK_
 
 @pytest.fixture
 def fake_home(tmp_path):
-    home = tmp_path / "jim"
+    home = tmp_path / "user"
     (home / "Downloads").mkdir(parents=True)
     (home / "Documents").mkdir()
     (home / "Pictures").mkdir()
@@ -1138,7 +1138,7 @@ def test_extract_txt_returns_content(tmp_path):
 
 def test_extract_md_returns_content(tmp_path):
     md = tmp_path / "readme.md"
-    md.write_text("# Family Budget\n\nMonthly expenses for the name-labeled household.")
+    md.write_text("# Family Budget\n\nMonthly expenses for the household.")
     result = extract_first_page(str(md))
     assert "Family Budget" in result
 
@@ -2207,7 +2207,7 @@ from scripts.html_report import generate_report
 
 @pytest.fixture
 def fake_home(tmp_path):
-    home = tmp_path / "jim"
+    home = tmp_path / "user"
     (home / "Downloads").mkdir(parents=True)
     (home / "Documents").mkdir()
     (home / "Pictures").mkdir()

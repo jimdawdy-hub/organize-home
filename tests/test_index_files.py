@@ -7,7 +7,7 @@ from scripts.index_files import build_index, save_index, load_index
 
 @pytest.fixture
 def fake_home(tmp_path):
-    home = tmp_path / "jim"
+    home = tmp_path / "user"
     home.mkdir()
     (home / "Downloads").mkdir()
     (home / "Documents").mkdir()

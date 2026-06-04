@@ -129,14 +129,14 @@ Files are sorted in this order (first match wins):
 
 | File type | Destination |
 |-----------|-------------|
-| Filenames containing `bank statement` in `~/Downloads/` | `~/Financial/` |
+| Filenames containing `bank statement`, `invoice`, or `receipt` in `~/Downloads/` | `~/Financial/` |
 | Filenames containing `DMR` in `~/Downloads/` | `~/HamRadio/` |
-| Filenames containing `letter` in `~/Downloads/` | `~/Correspondence/` |
-| Filenames containing `name-labeled` and `CV` in `~/Downloads/` | `~/Career/` |
-| Filenames containing `name-labeled` in `~/Downloads/` and not otherwise classified | `~/Personal/` |
+| Filenames containing `letter to`, `cover letter`, or `correspondence` in `~/Downloads/` | `~/Correspondence/` |
+| Filenames containing `resume` or `CV` in `~/Downloads/` | `~/Career/` |
+| Filenames containing `personal` in `~/Downloads/` and not otherwise classified | `~/Personal/` |
 | Filenames that look like a case citation in `~/Downloads/` | `~/Legal Reference/` |
-| Filenames containing `Med Recs`, `Bills`, `Deposition`, or `transcript` in `~/Downloads/` | `~/Medical Files/` |
-| Filenames containing `motion`, `order`, `orders`, `Advocate`, `pltf`, `Court`, `Ct`, `Def`, `Plainitff`, or `Response` in `~/Downloads/` | `~/Legal Filings/` |
+| Filenames containing `medical records`, `bills`, `deposition`, or `transcript` in `~/Downloads/` | `~/Medical Files/` |
+| Filenames containing `motion`, `order`, `orders`, `ct order`, `court`, `judge`, `plaintiff`, `defendant`, or `response` in `~/Downloads/` | `~/Legal Filings/` |
 | `.zip .gz .bz2 .xz .7z .rar .tar` | `~/Zip Archive/` |
 | `.eml .msg` | `~/Emails/` |
 | `.epub .mobi .azw3` | `~/Books/` |
@@ -145,8 +145,8 @@ Files are sorted in this order (first match wins):
 | PDFs, Word docs, text files | AI-reviewed, routed by content |
 
 Downloads filename routing is intentionally case-insensitive and uses simple substring matching: if the rule text appears anywhere in the filename, it counts. This wins before the generic file-type rules above.
-`name-labeled` by itself is handled in the AI review phase as a fallback to `~/Personal/` when nothing more specific matches.
-`Med Recs`, `Bills`, `Deposition`, and `transcript` in `~/Downloads/` route to `~/Medical Files/` before broader legal rules, including embedded forms like `dmr3.csv`.
+Personal items are handled in the AI review phase as a fallback to `~/Personal/` when nothing more specific matches.
+`medical records`, `bills`, `deposition`, and `transcript` in `~/Downloads/` route to `~/Medical Files/` before broader legal rules, including embedded forms like `dmr3.csv`.
 
 The AI creates new first-level folders as needed (e.g., `~/Family/`, `~/Financial/`). Files it can't categorize with >50% confidence are highlighted in the HTML report for your review.
 

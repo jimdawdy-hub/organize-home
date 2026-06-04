@@ -13,13 +13,13 @@ EBOOK_EXTS = {".epub", ".mobi", ".azw3"}
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic"}
 
 _DOWNLOAD_FILENAME_RULES = (
-    ("financial:wells fargo", "Financial", ("wells fargo", "wellsfargo")),
+    ("financial:bank statement", "Financial", ("bank statement", "invoice", "receipt", "statement")),
     ("legal_reference:case citation", "Legal Reference", (" v ", " v. ", "ill. app.", "ill.")),
     ("hamradio:dmr", "HamRadio", ("dmr",)),
-    ("correspondence:letter", "Correspondence", ("letter",)),
-    ("career:dawdy cv", "Career", ("dawdy cv", "cv dawdy")),
+    ("correspondence:letter", "Correspondence", ("letter to", "cover letter", "correspondence")),
+    ("career:resume cv", "Career", ("resume", "cv", "curriculum vitae")),
     (
-        "medmal:work filename",
+        "medical:work filename",
         "Medical Files",
         ("med recs", "med rec", "bills", "deposition", "transcript"),
     ),
@@ -33,7 +33,7 @@ _DOWNLOAD_FILENAME_RULES = (
             "advocate",
             "pltf",
             "court",
-            "ct",
+            "ct order",
             "def",
             "plainitff",
             "response",
@@ -61,10 +61,6 @@ def get_destination(entry: dict, home_dir: str) -> tuple[str, str] | None:
 
     if parent_name == "downloads":
         for rule_name, folder, needles in _DOWNLOAD_FILENAME_RULES:
-            if rule_name == "career:dawdy cv":
-                if _matches_substring(filename_haystack, ("dawdy",)) and _matches_substring(filename_haystack, ("cv",)):
-                    return str(home / folder), rule_name
-                continue
             if _matches_substring(filename_haystack, needles):
                 return str(home / folder), rule_name
 

@@ -45,9 +45,9 @@ CLASSIFICATION_RULES = (
     ),
     (
         "Medical Files",
-        ("med rec", "med recs", "bills", "deposition", "transcript",
-         "medical records", "billing records"),
-        "med mal work document",
+        ("medical records", "bills", "deposition", "transcript",
+         "billing records"),
+        "medical files document",
     ),
     (
         "Correspondence",
@@ -142,14 +142,6 @@ def classify_document_text(text: str | None, path: str, home_dir: str) -> dict:
             "folder": str(Path(home_dir) / "Legal Reference"),
             "confidence": 0.88,
             "reason": "filename or first page resembles a case citation",
-        }
-
-    if "dawdy" in haystack:
-        return {
-            "category": "Personal",
-            "folder": str(Path(home_dir) / "Personal"),
-            "confidence": 0.62,
-            "reason": "filename references name-labeled and no more specific category matched",
         }
 
     if len((text or "").strip()) < 40:

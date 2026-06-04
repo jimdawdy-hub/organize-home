@@ -11,7 +11,7 @@ from scripts.state import StateManager
 
 @pytest.fixture
 def fake_home(tmp_path):
-    home = tmp_path / "jim"
+    home = tmp_path / "user"
     (home / "Downloads").mkdir(parents=True)
     (home / "Documents").mkdir()
     (home / "Pictures").mkdir()
@@ -81,17 +81,17 @@ def test_image_already_in_pictures_not_routed(fake_home):
     assert result is None
 
 
-def test_pdf_matches_embedded_litigation_terms(fake_home):
+def test_pdf_without_litigation_terms_not_routed(fake_home):
     entry = _entry(str(fake_home / "Downloads" / "contract.pdf"), ".pdf")
     result = get_destination(entry, str(fake_home))
-    assert result == (str(fake_home / "Legal Filings"), "legal:litigation filename")
+    assert result is None
 
 
-def test_download_filename_wells_fargo_routes_to_financial(fake_home):
-    entry = _entry(str(fake_home / "Downloads" / "063025 WellsFargo.pdf"), ".pdf")
+def test_download_filename_bank_statement_routes_to_financial(fake_home):
+    entry = _entry(str(fake_home / "Downloads" / "063025 bank statement.pdf"), ".pdf")
     dest, rule = get_destination(entry, str(fake_home))
     assert dest == str(fake_home / "Financial")
-    assert rule == "financial:wells fargo"
+    assert rule == "financial:bank statement"
 
 
 def test_download_filename_litigation_terms_route_to_legal_filings(fake_home):
@@ -115,15 +115,15 @@ def test_download_filename_letter_routes_to_correspondence(fake_home):
     assert rule == "correspondence:letter"
 
 
-def test_download_filename_dawdy_cv_routes_to_career(fake_home):
-    entry = _entry(str(fake_home / "Downloads" / "James_name-labeled_AI_Lawyer_CV.docx"), ".docx")
+def test_download_filename_resume_cv_routes_to_career(fake_home):
+    entry = _entry(str(fake_home / "Downloads" / "resume_example_cv.docx"), ".docx")
     dest, rule = get_destination(entry, str(fake_home))
     assert dest == str(fake_home / "Career")
-    assert rule == "career:dawdy cv"
+    assert rule == "career:resume cv"
 
 
-def test_download_filename_dawdy_is_not_auto_routed(fake_home):
-    entry = _entry(str(fake_home / "Downloads" / "family name-labeled notes.pdf"), ".pdf")
+def test_download_filename_personal_notes_is_not_auto_routed(fake_home):
+    entry = _entry(str(fake_home / "Downloads" / "family notes.pdf"), ".pdf")
     result = get_destination(entry, str(fake_home))
     assert result is None
 
@@ -135,18 +135,18 @@ def test_download_filename_case_citation_routes_to_legal_reference(fake_home):
     assert rule == "legal_reference:case citation"
 
 
-def test_download_filename_medmal_routes_to_med_mal_work(fake_home):
+def test_download_filename_medical_routes_to_medical_files(fake_home):
     entry = _entry(str(fake_home / "Downloads" / "Med Recs-bills Ortho Surgery Specialists.pdf"), ".pdf")
     dest, rule = get_destination(entry, str(fake_home))
     assert dest == str(fake_home / "Medical Files")
-    assert rule == "medmal:work filename"
+    assert rule == "medical:work filename"
 
 
-def test_download_filename_transcript_routes_to_med_mal_work(fake_home):
+def test_download_filename_transcript_routes_to_medical_files(fake_home):
     entry = _entry(str(fake_home / "Downloads" / "Transcript Request of Dr. Troy Boffeli.doc"), ".doc")
     dest, rule = get_destination(entry, str(fake_home))
     assert dest == str(fake_home / "Medical Files")
-    assert rule == "medmal:work filename"
+    assert rule == "medical:work filename"
 
 
 # ---------- apply_moves safety integration ----------

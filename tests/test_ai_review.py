@@ -34,7 +34,7 @@ def test_extract_txt_returns_content(tmp_path):
 
 def test_extract_md_returns_content(tmp_path):
     md = tmp_path / "readme.md"
-    md.write_text("# Family Budget\n\nMonthly expenses for the name-labeled household.")
+    md.write_text("# Family Budget\n\nMonthly expenses for the household.")
     result = extract_first_page(str(md))
     assert "Family Budget" in result
 
@@ -47,7 +47,7 @@ def test_classify_legal_reference_document(fake_home):
     assert result["folder"] == str(fake_home / "Legal Reference")
 
 
-def test_classify_med_mal_work_document(fake_home):
+def test_classify_medical_files_document(fake_home):
     txt = fake_home / "med recs and bills.txt"
     txt.write_text("Med Recs and Bills\nOrthopaedic surgery records and billing summary.")
     result = classify_document_text(extract_first_page(str(txt)), str(txt), str(fake_home))
@@ -55,12 +55,12 @@ def test_classify_med_mal_work_document(fake_home):
     assert result["folder"] == str(fake_home / "Medical Files")
 
 
-def test_classify_dawdy_falls_back_to_personal(fake_home):
-    md = fake_home / "name-labeled notes.md"
+def test_classify_unrelated_file_falls_back_to_personal(fake_home):
+    md = fake_home / "personal notes.md"
     md.write_text("Miscellaneous notes.")
     result = classify_document_text(extract_first_page(str(md)), str(md), str(fake_home))
-    assert result["category"] == "Personal"
-    assert result["folder"] == str(fake_home / "Personal")
+    assert result["category"] == "Human Review"
+    assert result["folder"] == str(fake_home / "Human Review")
 
 
 def test_extract_unknown_extension_returns_none(tmp_path):
@@ -72,7 +72,7 @@ def test_extract_unknown_extension_returns_none(tmp_path):
 
 @pytest.fixture
 def fake_home(tmp_path):
-    h = tmp_path / "jim"
+    h = tmp_path / "user"
     (h / "Downloads").mkdir(parents=True)
     return h
 

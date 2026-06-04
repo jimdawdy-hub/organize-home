@@ -14,7 +14,7 @@ from scripts.html_report import generate_report
 
 @pytest.fixture
 def fake_home(tmp_path):
-    home = tmp_path / "jim"
+    home = tmp_path / "user"
     (home / "Downloads").mkdir(parents=True)
     (home / "Documents").mkdir()
     (home / "Pictures").mkdir()
